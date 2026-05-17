@@ -22,6 +22,13 @@ results/
 pending_review/
 checkpoints/
 
+# Dataset artifacts (download separately)
+.cache/
+figures/
+*.zip
+*.7z
+*.tar.gz
+
 # OS
 .DS_Store
 Thumbs.db

@@ -2,47 +2,32 @@
 
 **Beyond One-Shot Diagnosis with Agents That Remember, Reflect, and Improve**
 
-An independent implementation of the Evo-MedAgent architecture from Shen et al. (arXiv:2604.14475, 2026).
+[![arXiv](https://img.shields.io/badge/arXiv-2604.14475-b31b1b.svg)](https://arxiv.org/abs/2604.14475)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Evo-MedAgent introduces a **self-evolving memory framework** for medical LLM agents. Instead of solving each case from scratch, the agent accumulates experience across cases — like a radiologist improving with every patient they read.
+An independent implementation of the Evo-MedAgent architecture proposed in Shen et al. (2026). Evo-MedAgent introduces a **self-evolving memory framework** for medical LLM agents — instead of solving each case from scratch, the agent accumulates experience across cases, much like a radiologist improving with every patient.
 
-## Key Idea
+## Overview
 
-| Without Memory | With Evo-MedAgent |
-|---|---|
-| Each case = fresh start | Learns from prior cases |
-| Same mistake repeated 50x | Reflects → corrects → avoids repetition |
-| Static tool trust | Tracks which tools actually help |
-| No procedural learning | Distills diagnostic heuristics over time |
+Medical diagnosis is inherently iterative: clinicians learn from past cases, internalize diagnostic patterns, and calibrate their trust in different tools over time. Standard LLM agents treat every case independently. Evo-MedAgent changes this by maintaining three persistent memory stores:
 
-## Three Memory Stores
+| Store | Role | Real-world analogue |
+|---|---|---|
+| **Episodic Memory (E)** | Records of past cases and their outcomes | "I've seen this presentation before" |
+| **Procedural Memory (S)** | Distilled diagnostic rules with priority levels | "Always rule out tension pneumothorax first" |
+| **Tool-Governance Memory (G)** | Per-tool reliability tracking | "This segmenter is unreliable for small nodules" |
 
-### 1. Episodic Memory (E)
-Stores compressed records of prior diagnostic episodes: case descriptors, tool-interaction traces, predicted vs. ground-truth answers, retrospective summaries, and actionable guidelines for future cases.
+All three evolve continuously at test time — no fine-tuning, no RLHF, no parameter updates.
 
-### 2. Procedural Memory (S)
-Distilled diagnostic rules with priority tags:
-- `ρ = 0`: CRITICAL (life-threatening misses)
-- `ρ = 1`: IMPORTANT (best practices)
-- `ρ = 2`: GUIDANCE (helpful reminders)
-
-Rules evolve via **utility-driven selection** — proven rules persist, harmful ones are pruned.
-
-### 3. Tool-Governance Memory (G)
-Tracks per-tool reliability:
-- TRUSTED: helpful rate > 0.70, zero harm
-- CAUTION: insufficient data or mixed results
-- AVOID: effective-bad rate exceeds threshold
-
-## Workflow
+## Architecture
 
 ```
-For each case:
-  1. Query memory → retrieve relevant episodes, rules, tool guidance
-  2. Assemble context prefix → guide agent reasoning
-  3. Agent diagnoses → produces answer + tool trace
+For each incoming case:
+  1. Query memory → retrieve relevant episodes, rules, and tool guidance
+  2. Assemble a context prefix that guides the agent's reasoning
+  3. Agent diagnoses → produces answer and tool-interaction trace
   4. Receive ground-truth feedback
-  5. Reflect → summarize lesson, extract new rules
+  5. Reflect (optionally with multimodal VLM) → extract lessons
   6. Update all three memory stores
   7. Next case benefits from accumulated experience
 ```
@@ -52,144 +37,167 @@ For each case:
 ### Installation
 
 ```bash
-git clone https://github.com/<your-username>/Evo-MedAgent.git
+git clone https://github.com/liuyoujia123/evo-medagent-code.git
 cd Evo-MedAgent
 pip install -r requirements.txt
 ```
 
-### Set API Keys
+### API Keys
+
+Set the following environment variables:
 
 ```bash
-# Required: LLM backend for text reasoning
-export DEEPSEEK_API_KEY="sk-your-deepseek-key"
-
-# Required: VLM for multimodal reflection
-export DASHSCOPE_API_KEY="sk-your-dashscope-key"
+export DEEPSEEK_API_KEY="sk-your-key"     # LLM for text reasoning
+export DASHSCOPE_API_KEY="sk-your-key"    # VLM for multimodal reflection
 ```
 
-Alternatively, edit `config.yaml` (see `config.yaml.example` for a template). The `api_key_env` field accepts either an environment variable name or a literal key string.
+Or edit `config.yaml` directly (see `config.yaml.example` for a template). The `api_key_env` field accepts either an environment variable name or a literal key.
 
-### Quick Demo (no API key needed)
+### Demo (no API key needed)
 
 ```bash
 python demo.py
 ```
-Runs the full pipeline with simulated responses, showing memory evolution across 25 cases.
 
-### Run on Sample Benchmark
+Runs the full pipeline with mock LLM responses across 25 cases, demonstrating memory evolution and cumulative accuracy improvement.
+
+### Benchmark Evaluation
 
 ```bash
 # Tool-free mode (VLM-only reasoning with memory)
 python main.py --cases 25 --tool-free
 
-# Tool-enabled mode (VLM orchestrates CXR tools)
+# Tool-enabled mode (VLM orchestrates CXR analysis tools)
 python main.py --cases 25
 
-# Multi-permutation evaluation (order sensitivity)
+# Order-sensitivity analysis (multiple permutations)
 python main.py --cases 25 --permutations 3
 
-# With specific categories only
+# Filter by diagnostic categories
 python main.py --cases 10 --categories diagnosis detection
 
-# Resume from checkpoint
+# Resume from a saved checkpoint
 python main.py --resume ./checkpoints --cases 25
 ```
 
-### Run Tests
+### Tests
 
 ```bash
 pip install pytest
 python -m pytest tests/ -v
 ```
 
+## Dataset
+
+This implementation uses **ChestAgentBench** (Wang et al.), a benchmark of 2,500 CXR MCQs across 675 cases spanning 7 diagnostic categories: detection, classification, localization, diagnosis, reasoning, segmentation, and report generation.
+
+- `chestagentbench/metadata.jsonl` — Raw benchmark metadata (included)
+- `data/real_cases.json` — Preprocessed cases in Evo-MedAgent format (included)
+- CXR images — Download separately from [wanglab/chestagentbench](https://huggingface.co/datasets/wanglab/chestagentbench) on HuggingFace
+
+To regenerate `real_cases.json` from the raw metadata after downloading images:
+
+```bash
+python data/chestagentbench_loader.py --data-dir ./chestagentbench --output ./data/real_cases.json
+```
+
 ## Project Structure
 
 ```
 Evo-MedAgent/
-├── main.py              # Entry point: CLI + benchmark runner
-├── demo.py              # Self-contained demo (no API key needed)
-├── config.yaml          # Configuration (LLM, memory, benchmark)
-├── config.yaml.example  # Configuration template for reference
+├── main.py                     # Entry point: CLI + benchmark runner
+├── demo.py                     # Self-contained demo (mock LLM, no API key)
+├── config.yaml                 # Runtime configuration
+├── config.yaml.example         # Configuration template
 ├── requirements.txt
+│
 ├── src/
-│   ├── agent.py         # Core EvoMedAgent: reasoning loop
+│   ├── agent.py                # Core reasoning loop with memory augmentation
 │   ├── memory/
-│   │   ├── episodic.py  # Episodic memory store
-│   │   ├── procedural.py# Procedural memory (rules + utility)
-│   │   ├── governance.py# Tool-governance memory
-│   │   └── evolving.py  # Unified M_i = (E_i, S_i, G_i)
+│   │   ├── episodic.py         # Episodic memory (case records + embeddings)
+│   │   ├── procedural.py       # Procedural memory (diagnostic rules + utility)
+│   │   ├── governance.py       # Tool-governance memory (per-tool reliability)
+│   │   └── evolving.py         # Unified M_i = (E_i, S_i, G_i) coordinator
 │   ├── tools/
-│   │   ├── base.py      # Tool interface + registry
-│   │   └── simulated.py # CXR tools (classifier, segmenter, VQA, etc.)
+│   │   ├── base.py             # Tool interface and registry
+│   │   └── simulated.py        # Simulated CXR tools (classifier, segmenter, VQA)
 │   ├── reflection/
-│   │   └── reflector.py # Post-case multimodal reflection
+│   │   └── reflector.py        # Post-case multimodal reflection (VLM-based)
 │   ├── storage/
-│   │   ├── qdrant_store.py  # Qdrant vector DB connector
-│   │   └── neo4j_store.py   # Neo4j graph DB connector
-│   ├── retrieval/        # Unified retrieval over three stores
+│   │   ├── qdrant_store.py     # Qdrant vector DB connector (optional)
+│   │   └── neo4j_store.py      # Neo4j graph DB connector (optional)
+│   ├── retrieval/              # Unified semantic retrieval over memory stores
 │   └── utils/
-│       ├── llm_client.py # Unified LLM client (DeepSeek, OpenAI, Gemini, Ollama)
-│       └── embedding.py  # Sentence-transformers embeddings
+│       ├── llm_client.py       # Unified LLM/VLM client (DeepSeek, OpenAI, Gemini, Ollama)
+│       └── embedding.py        # Sentence-transformer embeddings
+│
 ├── data/
-│   ├── benchmark.py      # ChestAgentBench loader + sample cases
-│   └── chestagentbench_loader.py
-├── tests/
-│   └── test_memory.py    # Unit tests for all memory modules
-└── chestagentbench/      # Benchmark metadata
+│   ├── benchmark.py            # Benchmark loader and sample case generator
+│   ├── chestagentbench_loader.py  # ChestAgentBench JSONL parser
+│   └── real_cases.json         # Preprocessed benchmark cases
+│
+├── chestagentbench/
+│   ├── metadata.jsonl          # Raw benchmark metadata (2,500 MCQs)
+│   └── README.md               # Upstream dataset documentation
+│
+└── tests/
+    └── test_memory.py          # Unit tests for memory modules
 ```
 
 ## Configuration
 
-Copy `config.yaml.example` to `config.yaml` and customize:
+Key settings in `config.yaml`:
 
-```yaml
-llm:
-  provider: "deepseek"
-  api_key_env: "DEEPSEEK_API_KEY"    # env var or literal key
-  model: "deepseek-v4-pro"
+| Section | Key | Default | Description |
+|---|---|---|---|
+| `llm` | `provider` | `deepseek` | LLM backend for text reasoning |
+| `llm` | `model` | `deepseek-v4-pro` | Model name |
+| `llm.vlm` | `provider` | `openai` | VLM backend for image reflection |
+| `llm.vlm` | `model` | `qwen-vl-max` | Vision model (via DashScope) |
+| `episodic` | `max_episodes` | `200` | Max stored case records |
+| `episodic` | `retrieval_k` | `3` | Top-K similar episodes retrieved |
+| `procedural` | `max_rules` | `50` | Max diagnostic rules |
+| `procedural` | `retrieval_k` | `5` | Top-K relevant rules retrieved |
+| `governance` | `trusted_threshold` | `0.70` | Helpful rate to mark a tool TRUSTED |
+| `reflection` | `human_in_the_loop` | `true` | Require manual rule approval |
 
-# Optional: persistent databases
-database:
-  qdrant:
-    enabled: false    # set true to enable Qdrant vector search
-  neo4j:
-    enabled: false    # set true to enable Neo4j graph storage
-```
+For persistent storage, enable Qdrant (vector search) and/or Neo4j (graph) under `database`.
 
-## Design Highlights
+## Design Principles
 
-- **Training-Free Test-Time Learning** — No fine-tuning, no RLHF, no parameter updates. Memory evolves purely through retrieval + reflection at test time.
-- **Plug-and-Play** — Works on top of any frozen VLM. Just add this memory module to an existing medical agent.
-- **Human-in-the-Loop** — New procedural rules require manual approval before entering the procedural memory, preventing hallucinated rules from contaminating the knowledge base.
-- **Low Overhead** — Per case: one additional embedding retrieval pass + one reflection LLM call.
+- **Training-free** — No gradient updates. Memory evolves purely through retrieval, reflection, and structured updates at inference time.
+- **Plug-and-play** — Works on top of any frozen VLM. Add the memory module to your existing medical agent.
+- **Human-in-the-loop** — New procedural rules are held in `pending_review/` until manually approved (`python main.py --approve <rule_id>`), preventing hallucinated rules from contaminating the knowledge base.
+- **Complementary memories** — Episodic memory excels at recurring patterns; procedural memory generalizes to novel combinations. Together they outperform either alone.
 
 ## Extending
 
-### Adding a New Tool
+### Adding a new tool
 
 ```python
 from src.tools.base import BaseTool, ToolResult
 
 class MyTool(BaseTool):
     def __init__(self):
-        super().__init__(name="my_tool", description="Custom CXR tool")
+        super().__init__(name="my_tool", description="Custom CXR analysis tool")
 
     def run(self, image_path: str, **kwargs) -> ToolResult:
-        return ToolResult(self.name, success=True, output="Result")
+        # Your logic here
+        return ToolResult(self.name, success=True, output="Finding: ...")
 
 toolbox.register(MyTool())
 memory.governance.register_tools(["my_tool"])
 ```
 
-### Adding Custom Cases
+### Adding custom cases
 
 ```json
 [
   {
-    "question": "Is there a pneumothorax?",
-    "ground_truth": "Yes, right-sided",
+    "question": "Is there a pneumothorax in this CXR?",
+    "ground_truth": "Yes, left-sided",
     "category": "detection",
-    "case_descriptor": "CXR detection: pneumothorax right",
+    "case_descriptor": "CXR detection: pneumothorax, unilateral left",
     "image_paths": ["/path/to/cxr.png"]
   }
 ]
@@ -199,20 +207,30 @@ Then run: `python main.py --case-file my_cases.json --cases 50`
 
 ## Citation
 
-If you use this implementation in your research, please cite the original paper:
+If you use this implementation, please cite the original paper:
 
 ```bibtex
 @article{shen2026evomedagent,
-  title={Evo-MedAgent: Beyond One-Shot Diagnosis with Agents That Remember, Reflect, and Improve},
-  author={Shen, Weixiang and Jian, Bailiang and Li, Jun and Liu, Che and Moll, Johannes
-          and Hu, Xiaobin and Rueckert, Daniel and Li, Hongwei Bran and Pan, Jiazhen},
-  journal={arXiv preprint arXiv:2604.14475},
-  year={2026}
+  title   = {Evo-MedAgent: Beyond One-Shot Diagnosis with Agents That
+             Remember, Reflect, and Improve},
+  author  = {Shen, Weixiang and Jian, Bailiang and Li, Jun and Liu, Che
+             and Moll, Johannes and Hu, Xiaobin and Rueckert, Daniel
+             and Li, Hongwei Bran and Pan, Jiazhen},
+  journal = {arXiv preprint arXiv:2604.14475},
+  year    = {2026}
+}
+```
+
+Also cite the ChestAgentBench dataset if you use the benchmark:
+
+```bibtex
+@misc{wang2025chestagentbench,
+  title   = {ChestAgentBench: A Benchmark for Chest X-ray Agent},
+  author  = {Wang, ...},
+  year    = {2025}
 }
 ```
 
 ## License
 
-This implementation is released under the MIT License. See [LICENSE](LICENSE) for details.
-
-The original paper is under CC BY-NC-SA 4.0.
+This implementation is released under the [MIT License](LICENSE). The original paper is under CC BY-NC-SA 4.0.
