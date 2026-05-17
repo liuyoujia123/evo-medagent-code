@@ -1,0 +1,94 @@
+# =============================================================================
+# Evo-MedAgent Configuration (v2 — VLM reflection + Human-in-the-Loop + Persistence)
+# =============================================================================
+# Copy this file to config.yaml and fill in your API keys.
+#    cp config.yaml.example config.yaml
+#
+# API keys can be set in two ways:
+#   1. Environment variable name (recommended): api_key_env: "DEEPSEEK_API_KEY"
+#      → reads from os.getenv("DEEPSEEK_API_KEY")
+#   2. Literal key string: api_key_env: "sk-abc123..."
+#      → used directly (NOT recommended — keep keys out of config files)
+# =============================================================================
+
+# ========== LLM Backend (text reasoning) ==========
+llm:
+  provider: "deepseek"
+  api_key_env: "DEEPSEEK_API_KEY"       # set via: export DEEPSEEK_API_KEY="sk-..."
+  base_url: "https://api.deepseek.com"
+  model: "deepseek-v4-pro"
+  max_tokens: 2048
+  temperature: 0.0
+
+  # ===== VLM (vision reflection) =====
+  vlm:
+    provider: "openai"
+    api_key_env: "DASHSCOPE_API_KEY"    # set via: export DASHSCOPE_API_KEY="sk-..."
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model: "qwen-vl-max"
+    max_tokens: 600
+    temperature: 0.0
+
+# ========== Embedding Model ==========
+embedding:
+  model: "all-MiniLM-L6-v2"
+  device: "cpu"                         # cpu | cuda
+  dimension: 384
+
+# ========== Database (persistent storage, optional) ==========
+database:
+  qdrant:
+    enabled: false
+    url: "http://localhost:6333"
+    api_key_env: "QDRANT_API_KEY"
+    collection_name: "evo_medagent_episodic"
+    vector_dim: 384
+
+  neo4j:
+    enabled: false
+    uri: "bolt://localhost:7687"
+    username: "neo4j"
+    password_env: "NEO4J_PASSWORD"
+    database: "neo4j"
+
+# ========== Episodic Memory (E) ==========
+episodic:
+  max_episodes: 200
+  retrieval_k: 3
+  relevance_threshold: 0.3
+
+# ========== Procedural Memory (S) ==========
+procedural:
+  max_rules: 50
+  retrieval_k: 5
+  exploration_weight: 0.15
+  prune_threshold: 0.0
+  priority_default: 1
+
+# ========== Tool Governance (G) ==========
+governance:
+  trusted_threshold: 0.70
+  trusted_min_interactions: 6
+  avoid_threshold: 0.60
+  avoid_min_interactions: 10
+
+# ========== Reflection ==========
+reflection:
+  enabled: true
+  summarize_episode: true
+  extract_rules: true
+  human_in_the_loop: true
+  require_manual_approval: true
+  pending_dir: "./pending_review"
+
+# ========== Benchmark ==========
+benchmark:
+  name: "ChestAgentBench"
+  random_seed: 42
+  evaluate_every: 10
+
+# ========== Persistence ==========
+persistence:
+  save_dir: "./checkpoints"
+  save_every: 50
+  resume: true

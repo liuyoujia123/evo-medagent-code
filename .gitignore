@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+*.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# Claude
+.claude/
+
+# Runtime outputs
+results/
+pending_review/
+checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
